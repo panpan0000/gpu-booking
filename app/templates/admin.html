@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>集群与机器管理</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+<div class="max-w-5xl mx-auto p-6" x-data="admin()" x-init="load()">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">集群与机器管理</h1>
+    <a href="/" class="text-blue-600 hover:underline text-sm">← 占用看板</a>
+  </div>
+
+  <div x-show="msg" class="mb-4 p-3 rounded text-sm"
+       :class="msgOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
+       x-text="msg"></div>
+
+  <!-- 集群 -->
+  <div class="bg-white rounded-lg shadow p-5 mb-6">
+    <h2 class="font-semibold mb-3">集群</h2>
+    <div class="grid grid-cols-6 gap-2 mb-3 text-sm">
+      <input x-model="cForm.name" placeholder="名称* 如: 训练集群" class="border rounded px-2 py-1">
+      <select x-model="cForm.adapter_type" class="border rounded px-2 py-1">
+        <option value="custom_http">custom_http</option>
+        <option value="prometheus">prometheus</option>
+        <option value="k8s_api">k8s_api</option>
+      </select>
+      <input x-model="cForm.endpoint" placeholder="API 地址" class="border rounded px-2 py-1 col-span-2">
+      <input x-model="cForm.token_env" placeholder="token 环境变量名" class="border rounded px-2 py-1">
+      <input x-model="cForm.extra_config" placeholder='extra_config(JSON)' class="border rounded px-2 py-1">
+    </div>
+    <div class="flex gap-2 items-center mb-3">
+      <label class="text-sm"><input type="checkbox" x-model="cForm.enabled"> 启用采集</label>
+      <button @click="saveCluster" class="bg-blue-600 text-white rounded px-4 py-1 text-sm"
+              x-text="cForm.id ? '保存修改' : '添加集群'"></button>
+      <button x-show="cForm.id" @click="resetClusterForm" class="text-gray-500 text-sm">取消编辑</button>
+    </div>
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-gray-500">
+        <th>名称</th><th>适配器</th><th>endpoint</th><th>启用</th><th></th>
+      </tr></thead>
+      <tbody>
+        <template x-for="c in clusters" :key="c.id">
+          <tr class="border-t">
+            <td class="py-1" x-text="c.name"></td>
+            <td x-text="c.adapter_type"></td>
+            <td class="truncate max-w-xs" x-text="c.endpoint"></td>
+            <td x-text="c.enabled ? '是' : '否'"></td>
+            <td class="text-right">
+              <button @click="editCluster(c)" class="text-blue-600 mr-2">编辑</button>
+              <button @click="delCluster(c)" class="text-red-600">删除</button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 机器 -->
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-3">机器(节点)</h2>
+    <div class="grid grid-cols-5 gap-2 mb-3 text-sm">
+      <input x-model="mForm.name" placeholder="名称* 如: gpu-node-05" class="border rounded px-2 py-1">
+      <select x-model="mForm.cluster_name" class="border rounded px-2 py-1">
+        <option value="">(不属集群)</option>
+        <template x-for="c in clusters" :key="c.id">
+          <option :value="c.name" x-text="c.name"></option>
+        </template>
+      </select>
+      <input x-model="mForm.node_name" placeholder="K8s 节点名" class="border rounded px-2 py-1">
+      <input x-model.number="mForm.total_gpus" type="number" min="1" placeholder="卡数*" class="border rounded px-2 py-1">
+      <div>
+        <button @click="saveMachine" class="bg-blue-600 text-white rounded px-4 py-1 text-sm"
+                x-text="mForm.id ? '保存修改' : '添加机器'"></button>
+        <button x-show="mForm.id" @click="resetMachineForm" class="text-gray-500 text-sm ml-2">取消</button>
+      </div>
+    </div>
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-gray-500">
+        <th>名称</th><th>集群</th><th>节点名</th><th>卡数</th><th></th>
+      </tr></thead>
+      <tbody>
+        <template x-for="m in machines" :key="m.id">
+          <tr class="border-t">
+            <td class="py-1" x-text="m.name"></td>
+            <td x-text="clusterName(m.cluster_id)"></td>
+            <td x-text="m.node_name"></td>
+            <td x-text="m.total_gpus"></td>
+            <td class="text-right">
+              <button @click="editMachine(m)" class="text-blue-600 mr-2">编辑</button>
+              <button @click="delMachine(m)" class="text-red-600">删除</button>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function admin() {
+  const emptyCluster = { id: null, name: '', adapter_type: 'custom_http', endpoint: '', token_env: '', extra_config: '{}', enabled: true };
+  const emptyMachine = { id: null, name: '', cluster_name: '', node_name: '', total_gpus: 8 };
+  return {
+    clusters: [], machines: [],
+    cForm: { ...emptyCluster }, mForm: { ...emptyMachine },
+    msg: '', msgOk: true,
+    async load() {
+      const [c, m] = await Promise.all([fetch('/api/clusters'), fetch('/api/machines')]);
+      this.clusters = await c.json();
+      this.machines = await m.json();
+    },
+    clusterName(id) {
+      const c = this.clusters.find(x => x.id === id);
+      return c ? c.name : '-';
+    },
+    flash(text, ok = true) {
+      this.msg = text; this.msgOk = ok;
+      setTimeout(() => this.msg = '', 4000);
+    },
+    async req(method, url, body) {
+      const r = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || r.statusText);
+      return data;
+    },
+    async saveCluster() {
+      try {
+        if (!this.cForm.name) throw new Error('名称必填');
+        const { id, ...body } = this.cForm;
+        await this.req(id ? 'PUT' : 'POST', '/api/clusters' + (id ? '/' + id : ''), body);
+        this.flash(id ? '集群已更新' : '集群已添加');
+        this.resetClusterForm();
+        await this.load();
+      } catch (e) { this.flash(e.message, false); }
+    },
+    editCluster(c) { this.cForm = { ...c }; },
+    resetClusterForm() { this.cForm = { ...emptyCluster }; },
+    async delCluster(c) {
+      if (!confirm(`删除集群 ${c.name}?`)) return;
+      try {
+        await this.req('DELETE', '/api/clusters/' + c.id);
+        this.flash('已删除');
+        await this.load();
+      } catch (e) { this.flash(e.message, false); }
+    },
+    async saveMachine() {
+      try {
+        if (!this.mForm.name) throw new Error('名称必填');
+        const { id, ...body } = this.mForm;
+        if (!body.cluster_name) body.cluster_name = null;
+        await this.req(id ? 'PUT' : 'POST', '/api/machines' + (id ? '/' + id : ''), body);
+        this.flash(id ? '机器已更新' : '机器已添加');
+        this.resetMachineForm();
+        await this.load();
+      } catch (e) { this.flash(e.message, false); }
+    },
+    editMachine(m) {
+      this.mForm = { id: m.id, name: m.name, cluster_name: this.clusterName(m.cluster_id),
+                     node_name: m.node_name, total_gpus: m.total_gpus };
+      if (this.mForm.cluster_name === '-') this.mForm.cluster_name = '';
+    },
+    resetMachineForm() { this.mForm = { ...emptyMachine }; },
+    async delMachine(m) {
+      if (!confirm(`删除机器 ${m.name}?`)) return;
+      try {
+        await this.req('DELETE', '/api/machines/' + m.id);
+        this.flash('已删除');
+        await this.load();
+      } catch (e) { this.flash(e.message, false); }
+    },
+  };
+}
+</script>
+</body>
+</html>

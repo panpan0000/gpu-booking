@@ -38,6 +38,11 @@ def stats_page(request: Request):
     return templates.TemplateResponse(request, "stats.html")
 
 
+@app.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request):
+    return templates.TemplateResponse(request, "admin.html")
+
+
 @app.post("/feishu/events")
 async def feishu_events(request: Request, background: BackgroundTasks):
     body = await request.json()

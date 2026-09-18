@@ -58,6 +58,81 @@ def create_machine(m: MachineIn):
         return machine
 
 
+@router.get("/clusters")
+def list_clusters():
+    with get_session() as session:
+        return list(session.exec(select(Cluster)).all())
+
+
+@router.put("/clusters/{cluster_id}")
+def update_cluster(cluster_id: int, c: ClusterIn):
+    with get_session() as session:
+        cluster = session.get(Cluster, cluster_id)
+        if not cluster:
+            raise HTTPException(404, "集群不存在")
+        dup = session.exec(select(Cluster).where(Cluster.name == c.name)).first()
+        if dup and dup.id != cluster_id:
+            raise HTTPException(409, "集群名已被占用")
+        for k, v in c.model_dump().items():
+            setattr(cluster, k, v)
+        session.add(cluster)
+        session.commit()
+        session.refresh(cluster)
+        return cluster
+
+
+@router.delete("/clusters/{cluster_id}")
+def delete_cluster(cluster_id: int):
+    with get_session() as session:
+        cluster = session.get(Cluster, cluster_id)
+        if not cluster:
+            raise HTTPException(404, "集群不存在")
+        if session.exec(select(Machine).where(Machine.cluster_id == cluster_id)).first():
+            raise HTTPException(409, "集群下还有机器, 先删除机器")
+        session.delete(cluster)
+        session.commit()
+        return {"ok": True}
+
+
+@router.delete("/machines/{machine_id}")
+def delete_machine(machine_id: int):
+    with get_session() as session:
+        machine = session.get(Machine, machine_id)
+        if not machine:
+            raise HTTPException(404, "机器不存在")
+        active = [r for r in active_reservations(session, machine_id)]
+        if active:
+            raise HTTPException(409, f"机器上还有 {len(active)} 条进行中的占用, 不能删除")
+        session.delete(machine)
+        session.commit()
+        return {"ok": True}
+
+
+@router.put("/machines/{machine_id}")
+def update_machine(machine_id: int, m: MachineIn):
+    with get_session() as session:
+        machine = session.get(Machine, machine_id)
+        if not machine:
+            raise HTTPException(404, "机器不存在")
+        dup = session.exec(select(Machine).where(Machine.name == m.name)).first()
+        if dup and dup.id != machine_id:
+            raise HTTPException(409, "机器名已被占用")
+        cluster_id = None
+        if m.cluster_name:
+            cluster = session.exec(select(Cluster).where(Cluster.name == m.cluster_name)).first()
+            if not cluster:
+                raise HTTPException(404, f"集群 {m.cluster_name} 不存在")
+            cluster_id = cluster.id
+        machine.name = m.name
+        machine.cluster_id = cluster_id
+        machine.node_name = m.node_name
+        machine.total_gpus = m.total_gpus
+        session.add(machine)
+        session.commit()
+        session.refresh(machine)
+        return machine
+
+
 @router.get("/machines")
 def list_machines():
     with get_session() as session:

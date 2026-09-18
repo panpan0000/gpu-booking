@@ -65,6 +65,12 @@ docker run -d -p 8000:8000 \
 
 ## 初始化数据
 
+打开 `/admin` 网页直接增删改查集群和机器(带占用中的机器禁止删除):
+
+![管理页](docs/admin.png)
+
+也可以用 API:
+
 ```bash
 # 登记集群(adapter_type: custom_http / prometheus / k8s_api)
 curl -X POST localhost:8000/api/clusters -H 'Content-Type: application/json' -d '{
