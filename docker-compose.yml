@@ -1,0 +1,17 @@
+services:
+  gpu-booking:
+    image: gpu-booking
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      FEISHU_APP_ID: ${FEISHU_APP_ID}
+      FEISHU_APP_SECRET: ${FEISHU_APP_SECRET}
+      FEISHU_VERIFY_TOKEN: ${FEISHU_VERIFY_TOKEN}
+      TZ: Asia/Shanghai
+    volumes:
+      - gpu-data:/data
+    restart: unless-stopped
+
+volumes:
+  gpu-data:
