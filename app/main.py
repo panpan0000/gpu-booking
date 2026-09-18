@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import BackgroundTasks, FastAPI, Request
@@ -7,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from .api import router as api_router
 from .db import init_db
+from .feishu import APP_ID as FEISHU_APP_ID, APP_SECRET as FEISHU_APP_SECRET
 from .feishu import VERIFY_TOKEN, extract_text, reply_text, send_text
 from .handler import handle_message
 from .scheduler import start_scheduler
@@ -21,6 +23,9 @@ templates = Jinja2Templates(directory="app/templates")
 async def lifespan(app: FastAPI):
     init_db()
     start_scheduler()
+    if os.getenv("FEISHU_TRANSPORT", "ws") == "ws" and FEISHU_APP_ID:
+        from .feishu_ws import start as start_ws
+        start_ws(FEISHU_APP_ID, FEISHU_APP_SECRET)
     yield
 
 
