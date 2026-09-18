@@ -36,7 +36,9 @@ def _run(app_id: str, app_secret: str) -> None:
             open_id = data.event.sender.sender_id.open_id
             if not text or not open_id:
                 return
-            asyncio.run(_process(msg.message_id, open_id, text))
+            # 回调在 lark ws 的事件循环里执行, asyncio.run 需要无线程循环, 另起线程
+            threading.Thread(target=lambda: asyncio.run(_process(msg.message_id, open_id, text)),
+                             daemon=True).start()
         except Exception:
             log.exception("长连接事件处理失败")
 
