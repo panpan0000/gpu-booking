@@ -47,21 +47,23 @@ def parse_message(text: str) -> Command:
         cmd.action = "mine"
         return cmd
 
-    # 续: "续 2h" / "续 gpu-node-05 2h" / "续 R123 2h"(兼容)
-    m = re.match(r"^(续|续订|renew)\s+(?:[Rr#]?(\d+)\s+)?(?:(\S+?)\s+)?(\d+(?:\.\d+)?\s*(?:d|天|h|小时|m|分钟)?)$", text, re.IGNORECASE)
+    # 续: "续 2h" / "续 gpu-node-05 2h" / "续 集群一 gpu-node-05 2h" / "续 R123 2h"(兼容)
+    m = re.match(r"^(续|续订|renew)\s+(?:[Rr#](\d+)\s+)?(?:(\S+?)\s+)?(?:(\S+?)\s+)?(\d+(?:\.\d+)?\s*(?:d|天|h|小时|m|分钟)?)$", text, re.IGNORECASE)
     if m:
         cmd.action = "renew"
         cmd.reservation_id = int(m.group(2)) if m.group(2) else None
-        cmd.machine_name = m.group(3) or ""
-        cmd.hours = _parse_hours(m.group(4))
+        # 两个名称段时: 前=集群 后=节点; 一个时段: 节点或机器名
+        parts = [p for p in (m.group(3), m.group(4)) if p]
+        cmd.machine_name = " ".join(parts)
+        cmd.hours = _parse_hours(m.group(5))
         return cmd
 
-    # 释放: "释放" / "释放 gpu-node-05" / "释放 R123"(兼容)
-    m = re.match(r"^(释放|退订|取消|release)(?:\s+(?:[Rr#]?(\d+)|(\S+)))?\s*$", text)
+    # 释放: "释放" / "释放 gpu-node-05" / "释放 集群一 gpu-node-05" / "释放 R123"(兼容)
+    m = re.match(r"^(释放|退订|取消|release)(?:\s+(?:[Rr#]?(\d+)|(.+)))?\s*$", text)
     if m:
         cmd.action = "release"
         cmd.reservation_id = int(m.group(2)) if m.group(2) else None
-        cmd.machine_name = m.group(3) or ""
+        cmd.machine_name = (m.group(3) or "").strip()
         return cmd
 
     # 申请, 目标可以是集群或机器(只按数量, 不指定物理卡号):

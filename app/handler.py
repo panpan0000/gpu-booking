@@ -57,9 +57,20 @@ def _resolve_mine(s, cmd: Command, open_id: str) -> tuple[Optional[Reservation],
         return r, ""
     mine = [r for r in active_reservations(s) if r.user_open_id == open_id]
     if cmd.machine_name:
-        mine = [r for r in mine
-                if (m := s.get(Machine, r.machine_id))
-                and cmd.machine_name in (m.name, m.node_name)]
+        clusters = {c.id: c.name for c in s.exec(select(Cluster)).all()}
+        target = cmd.machine_name.replace("/", " ").strip()
+
+        def match(r) -> bool:
+            m = s.get(Machine, r.machine_id)
+            if not m:
+                return False
+            cname = clusters.get(m.cluster_id, "")
+            label = m.node_name or m.name
+            forms = {m.name, label, f"{cname} {label}".strip(),
+                     f"{cname}/{label}".strip("/"), f"{cname} {m.name}".strip()}
+            return target in forms or cmd.machine_name in forms
+
+        mine = [r for r in mine if match(r)]
     if not mine:
         return None, "没有匹配的进行中的占用。发「我的」查看"
     if len(mine) > 1:
@@ -69,12 +80,15 @@ def _resolve_mine(s, cmd: Command, open_id: str) -> tuple[Optional[Reservation],
             m = s.get(Machine, r.machine_id)
             return r, f"(提示: 你在 {m.node_name or m.name} 有 {len(mine)} 条占用, 操作的是最早到期的一条)"
         lines = []
+        clusters = {c.id: c.name for c in s.exec(select(Cluster)).all()}
         for r in mine:
             m = s.get(Machine, r.machine_id)
             label = m.node_name or m.name if m else str(r.machine_id)
-            lines.append(f"  {label} {r.gpu_count}卡 到 {r.end_at:%m-%d %H:%M}")
-        first = lines[0].split()[0] if lines else "node1"
-        example = f"释放 {first}" if cmd.action == "release" else f"续 {first} 2h"
+            cname = clusters.get(m.cluster_id, "") if m else ""
+            lines.append(f"  {cname} {label} {r.gpu_count}卡 到 {r.end_at:%m-%d %H:%M}".strip())
+        first_m = s.get(Machine, mine[0].machine_id)
+        first_label = f"{clusters.get(first_m.cluster_id, '')} {first_m.node_name or first_m.name}".strip()
+        example = f"释放 {first_label}" if cmd.action == "release" else f"续 {first_label} 2h"
         return None, ("你有多条占用, 指定节点名再操作:\n" + "\n".join(lines)
                       + f"\n例如: {example}")
     return mine[0], ""
