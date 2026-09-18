@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU 使用统计</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+<div class="max-w-5xl mx-auto p-6" x-data="stats()" x-init="load()">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">GPU 使用统计</h1>
+    <a href="/" class="text-blue-600 hover:underline text-sm">← 占用看板</a>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-5 mb-5">
+    <h2 class="font-semibold mb-3">按人统计(卡·小时)</h2>
+    <canvas id="byUser" height="120"></canvas>
+  </div>
+  <div class="bg-white rounded-lg shadow p-5 mb-5">
+    <h2 class="font-semibold mb-3">按机器统计(卡·小时)</h2>
+    <canvas id="byMachine" height="120"></canvas>
+  </div>
+
+  <div class="grid grid-cols-2 gap-5">
+    <div class="bg-white rounded-lg shadow p-5">
+      <h2 class="font-semibold mb-3">个人明细</h2>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-gray-500"><th>用户</th><th>次数</th><th>卡·小时</th></tr></thead>
+        <tbody>
+          <template x-for="u in byUser" :key="u.user">
+            <tr class="border-t"><td class="py-1" x-text="u.user"></td>
+                <td x-text="u.count"></td><td x-text="(u.minutes/60).toFixed(1)"></td></tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+    <div class="bg-white rounded-lg shadow p-5">
+      <h2 class="font-semibold mb-3">机器明细</h2>
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-gray-500"><th>机器</th><th>次数</th><th>卡·小时</th></tr></thead>
+        <tbody>
+          <template x-for="m in byMachine" :key="m.machine">
+            <tr class="border-t"><td class="py-1" x-text="m.machine"></td>
+                <td x-text="m.count"></td><td x-text="(m.minutes/60).toFixed(1)"></td></tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function stats() {
+  return {
+    byUser: [], byMachine: [],
+    async load() {
+      const r = await fetch('/api/stats');
+      const d = await r.json();
+      this.byUser = d.by_user; this.byMachine = d.by_machine;
+      this.$nextTick(() => {
+        this.bar('byUser', d.by_user.map(x => x.user), d.by_user.map(x => +(x.minutes/60).toFixed(1)));
+        this.bar('byMachine', d.by_machine.map(x => x.machine), d.by_machine.map(x => +(x.minutes/60).toFixed(1)));
+      });
+    },
+    bar(id, labels, data) {
+      new Chart(document.getElementById(id), {
+        type: 'bar',
+        data: { labels, datasets: [{ data, backgroundColor: '#3b82f6' }] },
+        options: { plugins: { legend: { display: false } } },
+      });
+    },
+  };
+}
+</script>
+</body>
+</html>
