@@ -5,7 +5,7 @@
 **语义是"申请-占用-释放",不是提前预约**:申请成功即占用,别人申请同节点会被拒绝;释放或到期后别人才能申请。只按数量,不绑定物理卡号(卡由 K8s 调度)。
 
 飞书chatOps
-<img width="1502" height="1466" alt="image" src="https://github.com/user-attachments/assets/6f034316-cca3-4747-8c79-99188b87feed" />
+<img width="600" height="620" alt="image" src="https://github.com/user-attachments/assets/6f034316-cca3-4747-8c79-99188b87feed" />
 
 ![占用看板](docs/board.png)
 
