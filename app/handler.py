@@ -63,12 +63,18 @@ def _resolve_mine(s, cmd: Command, open_id: str) -> tuple[Optional[Reservation],
     if not mine:
         return None, "没有匹配的进行中的占用。发「我的」查看"
     if len(mine) > 1:
+        # 同一节点有多条: 直接操作最早到期的那条, 不再让用户选
+        if len({r.machine_id for r in mine}) == 1:
+            r = min(mine, key=lambda x: x.end_at)
+            m = s.get(Machine, r.machine_id)
+            return r, f"(提示: 你在 {m.node_name or m.name} 有 {len(mine)} 条占用, 操作的是最早到期的一条)"
         lines = []
         for r in mine:
             m = s.get(Machine, r.machine_id)
             label = m.node_name or m.name if m else str(r.machine_id)
             lines.append(f"  {label} {r.gpu_count}卡 到 {r.end_at:%m-%d %H:%M}")
-        example = "释放 gpu-node-05" if cmd.action == "release" else "续 gpu-node-05 2h"
+        first = lines[0].split()[0] if lines else "node1"
+        example = f"释放 {first}" if cmd.action == "release" else f"续 {first} 2h"
         return None, ("你有多条占用, 指定节点名再操作:\n" + "\n".join(lines)
                       + f"\n例如: {example}")
     return mine[0], ""
@@ -76,25 +82,25 @@ def _resolve_mine(s, cmd: Command, open_id: str) -> tuple[Optional[Reservation],
 
 def _release(cmd: Command, open_id: str) -> str:
     with get_session() as s:
-        r, err = _resolve_mine(s, cmd, open_id)
+        r, note = _resolve_mine(s, cmd, open_id)
         if not r:
-            return err
+            return note
         ok, msg = release(s, r.id, open_id)
         if ok:
             m = s.get(Machine, r.machine_id)
-            return f"已释放 {m.node_name or m.name} {r.gpu_count}卡"
+            return f"{note}\n已释放 {m.node_name or m.name} {r.gpu_count}卡".strip()
         return msg
 
 
 def _renew(cmd: Command, open_id: str) -> str:
     with get_session() as s:
-        r, err = _resolve_mine(s, cmd, open_id)
+        r, note = _resolve_mine(s, cmd, open_id)
         if not r:
-            return err
+            return note
         ok, msg = renew(s, r.id, open_id, cmd.hours)
         if ok:
             m = s.get(Machine, r.machine_id)
-            return f"已续订 {m.node_name or m.name} {r.gpu_count}卡 到 {r.end_at:%m-%d %H:%M}"
+            return f"{note}\n已续订 {m.node_name or m.name} {r.gpu_count}卡 到 {r.end_at:%m-%d %H:%M}".strip()
         return msg
 
 
@@ -158,7 +164,7 @@ def _status_text() -> str:
             label = m.node_name or m.name
             lines.append(f"【{label}】空闲 {m.total_gpus - used}/{m.total_gpus}")
             for r in sorted(rs, key=lambda x: -x.gpu_count):
-                left = int((r.end_at - datetime.utcnow()).total_seconds() // 60)
+                left = int((r.end_at - datetime.now()).total_seconds() // 60)
                 lines.append(f"  {r.gpu_count}卡: {r.user_name} 剩{left}分钟")
     return "\n".join(lines) or "还没有登记任何机器"
 

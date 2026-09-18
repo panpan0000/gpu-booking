@@ -20,7 +20,7 @@ def get_session() -> Session:
 
 
 def active_reservations(session: Session, machine_id: Optional[int] = None) -> list[Reservation]:
-    q = select(Reservation).where(Reservation.status == "active", Reservation.end_at > datetime.utcnow())
+    q = select(Reservation).where(Reservation.status == "active", Reservation.end_at > datetime.now())
     if machine_id is not None:
         q = q.where(Reservation.machine_id == machine_id)
     return list(session.exec(q).all())
@@ -32,7 +32,7 @@ def used_count(session: Session, machine_id: int) -> int:
 
 def _create(session: Session, machine: Machine, user_open_id: str, user_name: str,
             hours: float, gpu_count: int) -> Reservation:
-    now = datetime.utcnow()
+    now = datetime.now()
     r = Reservation(
         machine_id=machine.id,
         gpu_count=gpu_count,
@@ -102,7 +102,7 @@ def release(session: Session, reservation_id: int, user_open_id: str) -> tuple[b
         return False, "申请不存在或已结束"
     if r.user_open_id != user_open_id:
         return False, "这不是你的申请"
-    r.end_at = datetime.utcnow()
+    r.end_at = datetime.now()
     _close(session, r, "released", "released")
     return True, ""
 
@@ -122,7 +122,7 @@ def renew(session: Session, reservation_id: int, user_open_id: str, hours: float
 
 def expire_due(session: Session) -> list[Reservation]:
     """到期自动释放, 返回被释放的申请列表(用于私信通知)。"""
-    now = datetime.utcnow()
+    now = datetime.now()
     due = list(session.exec(
         select(Reservation).where(Reservation.status == "active", Reservation.end_at <= now)
     ).all())
@@ -132,7 +132,7 @@ def expire_due(session: Session) -> list[Reservation]:
 
 
 def due_for_remind(session: Session, within_minutes: int = 10) -> list[Reservation]:
-    now = datetime.utcnow()
+    now = datetime.now()
     soon = now + timedelta(minutes=within_minutes)
     rs = list(session.exec(
         select(Reservation).where(

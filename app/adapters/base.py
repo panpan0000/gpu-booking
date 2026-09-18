@@ -21,7 +21,7 @@ class GpuCardStatus:
 
     def __post_init__(self):
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now()
 
 
 class GpuStatusAdapter:

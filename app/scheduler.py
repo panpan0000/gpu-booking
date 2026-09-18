@@ -45,7 +45,7 @@ def _upsert_cards(cluster_name: str, cards) -> None:
                 util=c.util,
                 mem_used=c.mem_used,
                 mem_total=c.mem_total,
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(),
             ))
         session.commit()
 

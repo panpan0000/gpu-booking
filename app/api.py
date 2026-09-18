@@ -141,7 +141,7 @@ def list_machines():
 
 @router.get("/status")
 def status():
-    now = datetime.utcnow()
+    now = datetime.now()
     with get_session() as session:
         machines = list(session.exec(select(Machine)).all())
         clusters = {c.id: c for c in session.exec(select(Cluster)).all()}

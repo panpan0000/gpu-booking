@@ -100,7 +100,7 @@ function board() {
       return 'bg-lime-400';
     },
     fmt(iso) {
-      const d = new Date(iso + 'Z');
+      const d = new Date(iso);
       return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     },
   };
