@@ -8,6 +8,8 @@ from .models import Cluster, Machine, Reservation, UsageLog
 from .parser import match_node
 
 DB_URL = os.getenv("DB_URL", "sqlite:///gpu_booking.db")
+# 分配策略: binpack(默认, 刚好够用的最小空闲节点, 抗碎片) / spread(空闲最多的节点)
+ALLOC_STRATEGY = os.getenv("ALLOC_STRATEGY", "binpack")
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 
 
@@ -68,11 +70,13 @@ def book_in_cluster(session: Session, cluster: Cluster, node_spec: str,
     if not candidates:
         return None, (f"集群 {cluster.name} 下没有匹配「节点{node_spec}」的机器"
                       if node_spec else f"集群 {cluster.name} 下没有登记机器")
-    candidates.sort(key=lambda x: -x[1])
-    machine, free = candidates[0]
-    if free < gpu_count:
+    ok = [(m, f) for m, f in candidates if f >= gpu_count]
+    if not ok:
         avail = ", ".join(f"{m.node_name or m.name}(空闲{f})" for m, f in candidates)
         return None, f"没有节点能满足 {gpu_count} 张卡。当前: {avail}"
+    # binpack: 选刚好够的最小空闲节点, 把大空闲留给大申请; spread: 选空闲最多的
+    machine, _ = (min(ok, key=lambda x: x[1]) if ALLOC_STRATEGY == "binpack"
+                  else max(ok, key=lambda x: x[1]))
     return _create(session, machine, user_open_id, user_name, hours, gpu_count), ""
 
 

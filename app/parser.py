@@ -84,6 +84,16 @@ def parse_message(text: str) -> Command:
             cmd.hours = hours
             return cmd
 
+    # 省略集群/节点: "4卡 4h" — 只有一个集群时由 handler 落到默认集群
+    m = re.match(r"^(\d+)\s*卡\s*(\S+)$", text)
+    if m:
+        hours = _parse_hours(m.group(2))
+        if hours > 0:
+            cmd.action = "book"
+            cmd.gpu_count = int(m.group(1))
+            cmd.hours = hours
+            return cmd
+
     return cmd
 
 

@@ -124,6 +124,20 @@ def _book(cmd: Command, open_id: str, name: str) -> str:
     if not cmd.gpu_count:
         return "没看懂要几张卡, 例如: 集群一 4卡 4h"
     with get_session() as s:
+        # 省略集群名: 只有一个集群时默认用它
+        if not cmd.machine_name:
+            all_clusters = list(s.exec(select(Cluster)).all())
+            if len(all_clusters) == 1:
+                cluster = all_clusters[0]
+                r, err = book_in_cluster(s, cluster, "", open_id, name,
+                                         cmd.hours, cmd.gpu_count)
+                if not r:
+                    return f"申请失败: {err}"
+                m = s.get(Machine, r.machine_id)
+                return (f"申请成功 ✅\n集群 {cluster.name} 节点 {m.node_name or m.name}, "
+                        f"{r.gpu_count}卡, 到 {r.end_at:%m-%d %H:%M} 到期。到期前我会私信你续订。")
+            names = ", ".join(c.name for c in all_clusters) or "(无)"
+            return f"请指定集群, 例如: {all_clusters[0].name if all_clusters else '集群名'} 4卡 4h。现有集群: {names}"
         # 优先按集群名解析; "集群一" 本身可能就是集群名, 也尝试去前缀
         targets = [cmd.machine_name]
         for prefix in ("集群", "机器"):
